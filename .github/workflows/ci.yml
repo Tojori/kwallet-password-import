@@ -1,0 +1,26 @@
+# SPDX-License-Identifier: LGPL-2.1-or-later
+name: CI
+on: [push, pull_request, workflow_dispatch]
+permissions:
+  contents: read
+env:
+  QT_QPA_PLATFORM: offscreen
+  ASAN_OPTIONS: alloc_dealloc_mismatch=0:detect_leaks=1
+jobs:
+  build-test:
+    name: Build + tests (${{ matrix.name }})
+    runs-on: ubuntu-latest
+    container: archlinux:latest
+    strategy:
+      matrix:
+        include:
+          - name: release
+            flags: -DCMAKE_BUILD_TYPE=RelWithDebInfo -DCMAKE_COMPILE_WARNING_AS_ERROR=ON
+          - name: asan+ubsan
+            flags: -DCMAKE_BUILD_TYPE=Debug -DKWIMPORT_SANITIZE=ON
+    steps:
+      - run: pacman -Syu --noconfirm --needed base-devel cmake git qt6-base kwallet
+      - uses: actions/checkout@v4
+      - run: cmake -S . -B build ${{ matrix.flags }}
+      - run: cmake --build build -j"$(nproc)"
+      - run: ctest --test-dir build --output-on-failure
