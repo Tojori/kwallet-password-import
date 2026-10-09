@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 #pragma once
 
-#include "apple_csv.h"
+#include "entry.h"
 
 #include <QMap>
 #include <QStringList>
@@ -11,9 +11,12 @@ namespace kwimport {
 
 using EntryMap = QMap<QString, QString>;
 
-// Map value "Source" marks entries created by this tool; --prune only ever
-// touches entries carrying it.
-inline const QString SourceValue = QStringLiteral("Apple Passwords (kwallet-icloud-import)");
+// Value of the "Source" field for entries created by this tool from a given
+// source, e.g. "Firefox (kwallet-password-import)". --prune only ever removes
+// entries carrying the marker of the source being imported.
+QString sourceMarker(const QString &sourceName);
+// Markers of older versions that are treated as equivalent for `sourceName`.
+QStringList legacyMarkers(const QString &sourceName);
 
 // One folder of a wallet.
 class WalletFolder
@@ -27,20 +30,19 @@ public:
 };
 
 // Wallet entry key: "<host> (<username>)", host taken from the URL (falls back
-// to the title). Lower-case host, "www." kept as-is (different hosts may hold
-// different accounts).
-QString entryKey(const AppleEntry &e);
-EntryMap toMap(const AppleEntry &e);
+// to the title).
+QString entryKey(const Entry &e);
+EntryMap toMap(const Entry &e, const QString &marker);
 
 struct Plan {
-    QStringList add;       // keys
+    QStringList add;
     QStringList update;
     QStringList unchanged;
-    QStringList stale;     // imported earlier, no longer in the export
+    QStringList stale;              // imported earlier from this source, no longer present
     QMap<QString, EntryMap> values; // key -> new value (add + update)
 };
 
-Plan makePlan(const QList<AppleEntry> &entries, WalletFolder &folder);
+Plan makePlan(const QList<Entry> &entries, WalletFolder &folder, const QString &sourceName);
 
 struct ApplyResult {
     int written = 0;

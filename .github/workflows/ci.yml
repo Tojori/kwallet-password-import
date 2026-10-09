@@ -19,7 +19,7 @@ jobs:
           - name: asan+ubsan
             flags: -DCMAKE_BUILD_TYPE=Debug -DKWIMPORT_SANITIZE=ON
     steps:
-      - run: pacman -Syu --noconfirm --needed base-devel cmake git qt6-base kwallet
+      - run: pacman -Syu --noconfirm --needed base-devel cmake git qt6-base kwallet kcoreaddons ki18n kwidgetsaddons gettext
       - uses: actions/checkout@v4
       - run: cmake -S . -B build ${{ matrix.flags }}
       - run: cmake --build build -j"$(nproc)"

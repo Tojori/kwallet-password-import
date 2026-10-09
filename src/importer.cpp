@@ -6,7 +6,21 @@
 
 namespace kwimport {
 
-QString entryKey(const AppleEntry &e)
+QString sourceMarker(const QString &sourceName)
+{
+    return QStringLiteral("%1 (kwallet-password-import)").arg(sourceName);
+}
+
+QStringList legacyMarkers(const QString &sourceName)
+{
+    // version 0.1 was "kwallet-icloud-import" and only knew Apple exports
+    if (sourceName.startsWith(QLatin1String("Apple"))) {
+        return {QStringLiteral("Apple Passwords (kwallet-icloud-import)")};
+    }
+    return {};
+}
+
+QString entryKey(const Entry &e)
 {
     QString base = QUrl::fromUserInput(e.url).host().toLower();
     if (base.isEmpty()) {
@@ -17,7 +31,7 @@ QString entryKey(const AppleEntry &e)
     return e.username.isEmpty() ? base : QStringLiteral("%1 (%2)").arg(base, e.username);
 }
 
-EntryMap toMap(const AppleEntry &e)
+EntryMap toMap(const Entry &e, const QString &marker)
 {
     EntryMap m;
     m.insert(QStringLiteral("Title"), e.title);
@@ -30,17 +44,20 @@ EntryMap toMap(const AppleEntry &e)
     if (!e.otpAuth.isEmpty()) {
         m.insert(QStringLiteral("OTPAuth"), e.otpAuth);
     }
-    m.insert(QStringLiteral("Source"), SourceValue);
+    m.insert(QStringLiteral("Source"), marker);
     return m;
 }
 
-Plan makePlan(const QList<AppleEntry> &entries, WalletFolder &folder)
+Plan makePlan(const QList<Entry> &entries, WalletFolder &folder, const QString &sourceName)
 {
     Plan plan;
+    const QString marker = sourceMarker(sourceName);
+    QStringList ownMarkers = legacyMarkers(sourceName);
+    ownMarkers.append(marker);
     const QStringList existingKeys = folder.keys();
     const QSet<QString> existing(existingKeys.cbegin(), existingKeys.cend());
     QSet<QString> seen;
-    for (const AppleEntry &e : entries) {
+    for (const Entry &e : entries) {
         // Same host and username twice in one export: keep both, numbered in
         // export order so that repeated imports map them to the same keys.
         const QString base = entryKey(e);
@@ -49,7 +66,7 @@ Plan makePlan(const QList<AppleEntry> &entries, WalletFolder &folder)
             key = QStringLiteral("%1 [%2]").arg(base).arg(n);
         }
         seen.insert(key);
-        const EntryMap value = toMap(e);
+        const EntryMap value = toMap(e, marker);
         if (!existing.contains(key)) {
             plan.add.append(key);
             plan.values.insert(key, value);
@@ -63,7 +80,7 @@ Plan makePlan(const QList<AppleEntry> &entries, WalletFolder &folder)
     for (const QString &key : existingKeys) {
         if (!seen.contains(key)) {
             const auto m = folder.readMap(key);
-            if (m && m->value(QStringLiteral("Source")) == SourceValue) {
+            if (m && ownMarkers.contains(m->value(QStringLiteral("Source")))) {
                 plan.stale.append(key); // never touch entries we did not create
             }
         }
